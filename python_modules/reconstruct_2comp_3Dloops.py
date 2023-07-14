@@ -65,13 +65,15 @@ def get_psfmat(outsize,bin_fac,psfsize_px,dvox,pxsz):
 		kernvals[i,boundflg] = kflat[boundflg]
 	return coo_matrix((kernvals.flatten(),(indices_hi.flatten(),indices_lo.flatten())),shape=(nhi,nlo))
 
-@processify
+#@processify
 def compute_fwdmat(emismap_name, errmap_name, loopids, loopid_info, vox_grid, cropr, voxmap,
 					voxlengths, temp1=1.5e6, temp2=0.5e6, xpo1=2.0, xpo2=2.0, zmax = None, vox_lct=None,
 					hfac=60.0e8/1.0e6, sigma_fac = 500.0, amat0=None, zmin=0.0, bin_fac=3, vox_mask=None,
 					loop_weights=None, psf_size_px = 0.7, asym=False, emprofs=None, curvature=True,
 					auxprof = None, temps=None, logt=None, tresp=None, map_in=None, obscenter=None, voxcenter=None, 
-					obswcs=None, voxwcs=None, temp_xpo = 1.0/3.0):
+					obswcs=None, voxwcs=None, temp_xpo = 1.0/3.0, final_xpo=1.0, seed=None):
+
+	print(emismap_name, errmap_name, temp1, temp2, xpo1, xpo2, zmax, vox_lct, hfac, sigma_fac, amat0, zmin, bin_fac, loop_weights, psf_size_px, asym, curvature, auxprof, temps, logt, tresp, map_in, obscenter, voxcenter, obswcs, voxwcs, temp_xpo, final_xpo)
 
 	from scipy.sparse import diags, csr_matrix, csc_matrix
 
@@ -115,7 +117,7 @@ def compute_fwdmat(emismap_name, errmap_name, loopids, loopid_info, vox_grid, cr
 	outsize_hi = bin_fac*np.array(map_in.data.shape)
 	nhi = outsize_hi[0]*outsize_hi[1]
 	psfnorm = np.mean(np.sum(psfmat,axis=0).A1)
-	print(psfnorm)
+	psfnorm2 = np.mean(np.sum(psfmat,axis=1).A1)
 			
 	#---------------- Compute the Loop to pixel matrix (including PSF and pixelization):
 	pxmin = vox2pix([0.0,0.0,0.0], voxmin, dvox, voxmap, map_in, obswcs=obswcs, voxcenter=voxcenter, vox_lct=vox_lct)
@@ -125,27 +127,29 @@ def compute_fwdmat(emismap_name, errmap_name, loopids, loopid_info, vox_grid, cr
 	xgrad = np.array([(pmax_x[0]-pxmin[0])/(nvox[0]-1.0),(pmax_y[0]-pxmin[0])/(nvox[1]-1.0),(pmax_z[0]-pxmin[0])/(nvox[2]-1.0)])
 	ygrad = np.array([(pmax_x[1]-pxmin[1])/(nvox[0]-1.0),(pmax_y[1]-pxmin[1])/(nvox[1]-1.0),(pmax_z[1]-pxmin[1])/(nvox[2]-1.0)])
 
-	[vox_ixa,vox_iya] = np.indices([nvox[0],nvox[1]],dtype='float32')
+	[vox_ixa,vox_iya] = np.indices([nvox[0],nvox[1]],dtype='float64')
 	vox_xy2 = ((vox_ixa-0.5*(nvox[0]-1))*dvox[0])**2 + ((vox_iya-0.5*(nvox[1]-1))*dvox[1])**2
 	if(curvature):
 		vox_iza = (rsun_cm*(1.0-np.sqrt(1.0-vox_xy2/rsun_cm**2))/dvox[2]).flatten()
 	else:
-		vox_iza = np.zeros(nvox[0:2],dtype='float32').flatten()
+		vox_iza = np.zeros(nvox[0:2],dtype='float64').flatten()
 	[vox_ixa, vox_iya] = [vox_ixa.flatten(), vox_iya.flatten()]
+
+	rgu = np.random.default_rng(seed)
 
 	print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 	[imin,imax] = np.clip(np.floor(([zmin,zmax]-voxmin[2])/dvox[2]).astype(np.int32),0,nvox[2])
 	t0 = time.time()
-	amat0 = csc_matrix((2*nloops+1,nhi),dtype='float32')
+	amat0 = csc_matrix((2*nloops+1,nhi),dtype='float64')
 	for i in range(imin,imax):
 		loopid_slice = loopids[:,:,i].flatten()
 		loopflg0 = loopflg[loopid_slice]
 		segmentid_slice = voxlengths[:,:,i].flatten()
 		loopid_flg = loopid_slice[loopflg0]
 		segmentid_flg = segmentid_slice[loopflg0]
-		vox_ixa2 = vox_ixa + np.random.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
-		vox_iya2 = vox_iya + np.random.uniform(low=-0.5,high=0.5,size=(vox_iya.shape))
-		vox_iza2 = vox_iza + np.random.uniform(low=-0.5,high=0.5,size=(vox_iza.shape))
+		vox_ixa2 = vox_ixa + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
+		vox_iya2 = vox_iya + rgu.uniform(low=-0.5,high=0.5,size=(vox_iya.shape))
+		vox_iza2 = vox_iza + rgu.uniform(low=-0.5,high=0.5,size=(vox_iza.shape))
 		ix_out = np.rint(bin_fac*(pxmin[0]+xgrad[0]*vox_ixa2+xgrad[1]*vox_iya2+xgrad[2]*(i-vox_iza2))).astype('int32')
 		iy_out = np.rint(bin_fac*(pxmin[1]+ygrad[0]*vox_ixa2+ygrad[1]*vox_iya2+ygrad[2]*(i-vox_iza2))).astype('int32')
 		inbounds = (ix_out >= 0)*(iy_out >= 0)*(ix_out < outsize_hi[0])*(iy_out < outsize_hi[1])
@@ -160,7 +164,7 @@ def compute_fwdmat(emismap_name, errmap_name, loopids, loopid_info, vox_grid, cr
 			pscal = 1 # np.exp(-2.0*(i+0.5)*dvox[2]/(temps[k]*hfac))
 			inten_slice = np.exp(-2.0*height/(temps[k]*hfac)).flatten() # np.zeros([nvox[0]*nvox[1]],dtype='float32')
 			inten_slice[loopflg0] *= emprofs[k,loopid_flg,segmentid_flg]*pscal
-			amat0 += csc_matrix((inten_slice[inbounds],(loopid_out+k,ixy)),shape=(2*nloops+1,nhi)) # a
+			amat0 += csc_matrix((inten_slice[inbounds]**final_xpo,(loopid_out+k,ixy)),shape=(2*nloops+1,nhi)) # a
 		amat0.sum_duplicates()            
 		print('Slice ',i,' of ',imax,time.time()-t0, 'Using: %s kb' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
@@ -169,7 +173,7 @@ def compute_fwdmat(emismap_name, errmap_name, loopids, loopid_info, vox_grid, cr
 	amat0 = diags(1.0/loop_weights)*amat0
 
 	modelinputs = {'temp1':temp1, 'temp2':temp2, 'xpo1':xpo1, 'xpo2':xpo2, 'map':map_in, 'emprofs':emprofs, 'vox_xy2':vox_xy2,
-					'loop_weights':loop_weights, 'hfac':hfac, 'psfnorm':psfnorm, 'curvature':curvature, 'rsun_cm':rsun_cm}	
+					'loop_weights':loop_weights, 'hfac':hfac, 'psfnorm':psfnorm, 'psfnorm2':psfnorm2, 'curvature':curvature, 'rsun_cm':rsun_cm}	
 	return amat0, modelinputs
 
 def bindown2(d,f):
@@ -178,8 +182,10 @@ def bindown2(d,f):
     return np.bincount(inds.flatten(),weights=d.flatten(),minlength=np.prod(n)).reshape(n)
 
 @processify
-def get_3d_emission(solution_in, modelinputs, vox_grid, loopids, voxlengths, loopid_info, dtype='float32', zmin=0, zmax=None, bin_facs=np.array([1,1,1])):
-
+def get_3d_emission(solution_in, modelinputs, vox_grid, loopids, voxlengths, loopid_info, 
+					dtype='float32', zmin=0, zmax=None, bin_facs=np.array([1,1,1])):
+	# This code is not applying the pseudo-curvature, but perhaps that's as it should be.
+	print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 	hfac = modelinputs.get('hfac',60.0e8/1.0e6)    
 	solution = solution_in/modelinputs['loop_weights']
 	nloops = len(loopid_info['looplengths'])
@@ -193,8 +199,9 @@ def get_3d_emission(solution_in, modelinputs, vox_grid, loopids, voxlengths, loo
 	emis3d = np.zeros(np.round(vox_grid.dims/bin_facs).astype(np.int32),dtype=dtype)
 	temps = [modelinputs['temp1'],modelinputs['temp2']]
 	nprofs = modelinputs['emprofs'].shape[0]
-	if(zmax is None): zmax = 6.0*hfac*np.max(temps)
+	if(zmax is None): zmax = (1+nvox[2])*dvox[2]
 	[imin,imax] = np.clip(np.floor(([zmin,zmax]-voxmin[2])/dvox[2]).astype(np.int32),0,nvox[2])
+	print(imin,imax,zmin,zmax)
 	for i in range(imin,imax):
 		loopid_slice = loopids[:,:,i]
 		segmentid_slice = voxlengths[:,:,i]
@@ -206,15 +213,9 @@ def get_3d_emission(solution_in, modelinputs, vox_grid, loopids, voxlengths, loo
 		else:
 			height = np.zeros(nvox[0:2])+voxmin[2]+(i+0.5)*dvox[2]
 		for k in range(0,nprofs):
-			#pscal = np.exp(-2.0*(i+0.5)*dvox[2]/(temps[k]*hfac))
-			#inten_slice = np.zeros([vox_grid.dims[0],vox_grid.dims[1]],dtype='float32')
-			pscal = 1 # np.exp(-2.0*(i+0.5)*dvox[2]/(temps[k]*hfac))
-			inten_slice = np.exp(-2.0*height/(temps[k]*hfac)) # np.zeros([nvox[0]*nvox[1]],dtype='float32')
-			#inten_slice[loopflg0] = emprofs[k,loopid_flg,segmentid_flg]*pscal
-			#print(loopid_flg.shape,modelinputs['emprofs'].shape,solution.shape,loopflg0.shape)
-			inten_slice[loopflg0] *= solution[nprofs*loopid_flg+k]*modelinputs['emprofs'][k,loopid_flg,segmentid_flg]*pscal
+			inten_slice = np.exp(-2.0*height/(temps[k]*hfac))
+			inten_slice[loopflg0] *= solution[nprofs*loopid_flg+k]*modelinputs['emprofs'][k,loopid_flg,segmentid_flg]
 			emis3d[:,:,np.floor(i/bin_facs[2]).astype(np.int32)] += bindown2(inten_slice,bin_facs[0:2])/dvox[2]
-
 	return emis3d
 
 def reconstruct(amat, modelinputs, solver=lgmres, steps=None, solver_tol=1.0e-4, reg_fac=0.01, regmat=None, dat_xpo=2, errs=None, data=None, sqrmap=False, map_reg=False):
@@ -230,7 +231,7 @@ def reconstruct(amat, modelinputs, solver=lgmres, steps=None, solver_tol=1.0e-4,
 	print(np.min(errs),np.max(errs),np.max(data))
 	return sparse_nlmap_solver(np.clip(data,0.1*np.min(errs),None), errs, amat.T, solver=lgmres, steps=steps, solver_tol=solver_tol, reg_fac=reg_fac, regmat=regmat, sqrmap=sqrmap, map_reg=map_reg)
 
-def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, bin_fac=3, psf_size_px = 0.7, curvature=True, obscenter=None, voxcenter=None, obswcs=None, voxwcs=None):
+def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, bin_fac=3, psf_size_px = 0.7, curvature=True, obscenter=None, voxcenter=None, obswcs=None, voxwcs=None, seed=None):
 
 	nvox = em_cube.shape
 	if(obscenter is None): obscenter=map_out.center
@@ -265,14 +266,16 @@ def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, b
 		vox_iza = np.zeros(nvox[0:2],dtype='float32').flatten()
 	[vox_ixa, vox_iya] = [vox_ixa.flatten(), vox_iya.flatten()]
 
+	rgu = np.random.default_rng(seed)
+
 	print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 	[imin,imax] = np.clip(np.floor(([zmin,zmax]-voxmin[2])/dvox[2]).astype(np.int32),0,nvox[2])
 	t0 = time.time()
 	img0 = np.zeros(outsize_hi)
 	for i in range(imin,imax):
-		vox_ixa2 = vox_ixa + np.random.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
-		vox_iya2 = vox_iya + np.random.uniform(low=-0.5,high=0.5,size=(vox_iya.shape))
-		vox_iza2 = vox_iza + np.random.uniform(low=-0.5,high=0.5,size=(vox_iza.shape))
+		vox_ixa2 = vox_ixa + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
+		vox_iya2 = vox_iya + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
+		vox_iza2 = vox_iza + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
 		ix_out = np.rint(bin_fac*(pxmin[0]+xgrad[0]*vox_ixa2+xgrad[1]*vox_iya2+xgrad[2]*(i-vox_iza2))).astype('int32')
 		iy_out = np.rint(bin_fac*(pxmin[1]+ygrad[0]*vox_ixa2+ygrad[1]*vox_iya2+ygrad[2]*(i-vox_iza2))).astype('int32')
 		inbounds = (ix_out >= 0)*(iy_out >= 0)*(ix_out < outsize_hi[0])*(iy_out < outsize_hi[1])
