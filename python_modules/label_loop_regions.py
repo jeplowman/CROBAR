@@ -1,10 +1,10 @@
 import time, resource, numpy as np
-from processify import processify
+#from processify import processify
 from scipy.spatial import Voronoi
 from scipy.spatial import ConvexHull
 from scipy.spatial import Delaunay
 
-@processify
+# @processify
 def label_loop_regions(fieldlines, lengths, vox_grid, loopnames=None, boundpad=0.2,
 		boundpad_zl=0.0,boundpad_zh=0.2,fp_resamp_vox=1.0,cellbound_padfac=1.5):
 
@@ -140,7 +140,7 @@ def label_loop_regions(fieldlines, lengths, vox_grid, loopnames=None, boundpad=0
 				'ila':ila, 'looppt_lengths':looppt_lengths, 'loop_dls':loop_dls, 
 				'looplengths_vox':looplengths, 'lmax_scal':lmax_scal, 'loopnames':loopnames}, voxel_loop_lengths #,'distances':voxel_loop_distances}
 
-@processify
+#@processify
 def get_cell_bounds(looppt_ids, loops_npts, loop_dls, looppt_coords, vor_bnd):
 	tstart=time.time()
 	print("Computing Voronoi cells:")
@@ -160,7 +160,7 @@ def get_cell_bounds(looppt_ids, loops_npts, loop_dls, looppt_coords, vor_bnd):
 		vh0[i,:] = np.max(verts,axis=0)
 	return vl0,vh0
 
-@processify
+#@processify
 def label_chunk_voxels(loop_unitvecs, loop_dls, looppt_coords, vl0, vh0, chunk_voxlo, looppt_lengths, looppt_ids, looplengths, lmax_scal, chunkdims, nloops, distmax):
 
 	dmax_scal = distmax
