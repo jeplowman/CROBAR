@@ -181,7 +181,7 @@ def bindown2(d,f):
     inds = np.ravel_multi_index(np.floor((np.indices(d.shape).T*n/np.array(d.shape))).T.astype(np.uint32),n)
     return np.bincount(inds.flatten(),weights=d.flatten(),minlength=np.prod(n)).reshape(n)
 
-@processify
+# @processify
 def get_3d_emission(solution_in, modelinputs, vox_grid, loopids, voxlengths, loopid_info, 
 					dtype='float32', zmin=0, zmax=None, bin_facs=np.array([1,1,1])):
 	# This code is not applying the pseudo-curvature, but perhaps that's as it should be.
