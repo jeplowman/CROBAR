@@ -38,7 +38,7 @@ def get_limb(vox_grid,rsun_cm):
     for i in range(0,vox_grid.dims[0]): coorda[i,:,:,0] = i
     for i in range(0,vox_grid.dims[1]): coorda[:,i,:,1] = i
 
-    limb = np.zeros([vox_grid.dims[0],vox_grid.dims[1],vox_grid.dims[2]],dtype=np.bool)
+    limb = np.zeros([vox_grid.dims[0],vox_grid.dims[1],vox_grid.dims[2]],dtype=bool)
     for i in range(0,vox_grid.dims[2]):
         coorda[:,:,0,2] = i
         coords = vox_grid.coords(coorda)
