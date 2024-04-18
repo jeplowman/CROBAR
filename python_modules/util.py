@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np, astropy.units as u
 
 def bindown(d,f,mask=None):
 	if(mask is None):
