@@ -149,7 +149,6 @@ def vox2pix(vox, voxmin, dvox, voxel_map, pixel_map, unit=u.cm, voxcenter=None, 
 	if(obswcs is None): obswcs = pixel_map.wcs
 	pixel_xy = np.array(obswcs.world_to_pixel(vox_coord))
 	ijxy_conversion = obswcs.world_to_array_index(obswcs.pixel_to_world(*(np.arange(obswcs.naxis))))
-	print(vox_coord)
 	return pixel_xy[list(ijxy_conversion)]
 
 def wrld2pix(cord, voxel_map, pixel_map, voxcenter=None, obswcs=None, vox_lct=None):
