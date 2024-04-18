@@ -55,7 +55,7 @@ def get_psfmat(outsize,bin_fac,psfsize_px,dvox,pxsz):
 	yalo = np.array(yalo).flatten()
 	indices_hi = np.zeros([nlo,kernsize],dtype='uint32')
 	indices_lo = np.zeros([nlo,kernsize],dtype='uint32')
-	kernvals = np.zeros([nlo,kernsize],dtype='float16')
+	kernvals = np.zeros([nlo,kernsize],dtype='float32')
 	for i in range(0,nlo):
 		ix = bin_fac*xalo[i]+vox_ioffs[0][:]
 		iy = bin_fac*yalo[i]+vox_ioffs[1][:]
