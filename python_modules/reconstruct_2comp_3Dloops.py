@@ -231,7 +231,7 @@ def reconstruct(amat, modelinputs, solver=lgmres, steps=None, solver_tol=1.0e-4,
 	print(np.min(errs),np.max(errs),np.max(data))
 	return sparse_nlmap_solver(np.clip(data,0.1*np.min(errs),None), errs, amat.T, solver=lgmres, steps=steps, solver_tol=solver_tol, reg_fac=reg_fac, regmat=regmat, sqrmap=sqrmap, map_reg=map_reg)
 
-def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, bin_fac=3, psf_size_px = 0.7, curvature=True, obscenter=None, voxcenter=None, obswcs=None, voxwcs=None, seed=None):
+def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, bin_fac=3, psf_size_px = 0.7, curvature=False, obscenter=None, voxcenter=None, obswcs=None, voxwcs=None, seed=None, psfmat=None, return_psf=False, silent=False):
 
 	nvox = em_cube.shape
 	if(obscenter is None): obscenter=map_out.center
@@ -244,11 +244,10 @@ def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, b
 	if(zmax is None): zmax = voxmin[2]+dvox[2]*nvox[2]
 
 	# --------------- Compute the detector matrix (PSF and pixelization):
-	psfmat = get_psfmat(map_out.data.shape,bin_fac,psf_size_px,dvox,pxsz)
+	if(psfmat is None): psfmat = get_psfmat(map_out.data.shape,bin_fac,psf_size_px,dvox,pxsz)
 	outsize_hi = bin_fac*np.array(map_out.data.shape)
 	nhi = outsize_hi[0]*outsize_hi[1]
 	psfnorm = np.mean(np.sum(psfmat,axis=0).A1)
-	print(psfnorm)
 			
 	#---------------- Compute the Loop to pixel matrix (including PSF and pixelization):
 	pxmin = vox2pix([0.0,0.0,0.0], voxmin, dvox, voxmap, map_out, obswcs=obswcs, voxcenter=voxcenter)
@@ -268,20 +267,32 @@ def imgfromcube(map_out, em_cube, voxmin, dvox, voxmap, zmax = None, zmin=0.0, b
 
 	rgu = np.random.default_rng(seed)
 
-	print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+	if(silent==False):
+		print('Memory usage: %s (kb)' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 	[imin,imax] = np.clip(np.floor(([zmin,zmax]-voxmin[2])/dvox[2]).astype(np.int32),0,nvox[2])
-	t0 = time.time()
+	[t0,t1,t2] = [0,0,0]
 	img0 = np.zeros(outsize_hi)
 	for i in range(imin,imax):
+		tstart0 = time.time()
 		vox_ixa2 = vox_ixa + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
 		vox_iya2 = vox_iya + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
 		vox_iza2 = vox_iza + rgu.uniform(low=-0.5,high=0.5,size=(vox_ixa.shape))
 		ix_out = np.rint(bin_fac*(pxmin[0]+xgrad[0]*vox_ixa2+xgrad[1]*vox_iya2+xgrad[2]*(i-vox_iza2))).astype('int32')
 		iy_out = np.rint(bin_fac*(pxmin[1]+ygrad[0]*vox_ixa2+ygrad[1]*vox_iya2+ygrad[2]*(i-vox_iza2))).astype('int32')
 		inbounds = (ix_out >= 0)*(iy_out >= 0)*(ix_out < outsize_hi[0])*(iy_out < outsize_hi[1])
-		#img0[(ix_out[inbounds],iy_out[inbounds])] += em_cube[:,:,i].flatten()[inbounds]
-		np.add.at(img0, (ix_out[inbounds],iy_out[inbounds]), em_cube[:,:,i].flatten()[inbounds])
-		print('Slice ',i,' of ',imax,time.time()-t0, 'Using: %s kb' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+		t0 += time.time()-tstart0
+		tstart1 = time.time()
+		inds = np.ravel_multi_index([ix_out[inbounds],iy_out[inbounds]],img0.shape)
+		t1 += time.time()-tstart1
+		tstart2 = time.time()
+		img0 += np.bincount(inds.flatten(),weights=em_cube[:,:,i].flatten()[inbounds],minlength=img0.size).reshape(img0.shape)
+		t2 += time.time()-tstart2
+		if(silent==False):
+			print('Slice ',i,' of ',imax,t0,t1,t2, 'Using: %s kb' % resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
 	imgout = (psfmat.T*img0.flatten()).reshape(map_out.data.shape)
-	return imgout
+	if(return_psf):
+		return imgout, psfmat
+	else:
+		return imgout
+
