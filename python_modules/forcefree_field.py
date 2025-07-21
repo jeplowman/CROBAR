@@ -210,7 +210,7 @@ def tracer(initial_points, mag, mag_coords, alpha = 0.0, rtol=1.0e-4, atol=None,
 		for j in range(0,len(output_fwd.y.T)): bvecs_fwd[:,j] = bfwd[np.argmin(np.sum((output_fwd.y.T[j]-rfwd)**2,axis=1))]
 		for j in range(0,len(output_rvs.y.T)): bvecs_rvs[:,j] = brvs[np.argmin(np.sum((output_rvs.y.T[j]-rrvs)**2,axis=1))]
 		lines.append(np.vstack((np.flipud(output_rvs.y[:,1:].T),output_fwd.y.T)))
-		bvecs.append(np.vstack((np.flipud(bvecs_rvs[:,1:].T),bvecs_rvs.T)))
+		bvecs.append(np.vstack((np.flipud(bvecs_rvs[:,1:].T),bvecs_fwd.T)))
 		if((i+1)%50 == 0): print('Done with line ', i,' at ', time.time()-tstart, ' s')
 		ivpargs_fwd[5].clear()
 		ivpargs_rvs[5].clear()
